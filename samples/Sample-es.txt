@@ -1,0 +1,58 @@
+WEBVTT
+
+00:00:00.000 --> 00:00:01.934
+Hola, soy Joshua Wright.
+
+00:00:01.934 --> 00:00:05.567
+Veamos los pasos para nuestro ejercicio de laboratorio: Memory
+
+00:00:05.567 --> 00:00:06.467
+Investigación
+
+00:00:06.467 --> 00:00:09.300
+En este ejercicio de laboratorio, necesitarás tu Slingshot Linux
+
+00:00:09.300 --> 00:00:11.333
+Virtual Machine, ya la tengo iniciada aquí.
+
+00:00:11.333 --> 00:00:16.633
+Y ya tengo mi navegador web abierto y voy a
+
+00:00:16.633 --> 00:00:19.467
+navega a los pasos del laboratorio haciendo clic en el menú hamburger menu
+
+00:00:19.467 --> 00:00:23.033
+seleccionando la sección uno, y luego memory investigation.
+
+00:00:23.033 --> 00:00:27.567
+En este ejercicio de laboratorio, continuarás examinando el
+
+00:00:27.567 --> 00:00:29.667
+Violación de la red Falsimentis.
+
+00:00:29.667 --> 00:00:33.166
+En el ejercicio de laboratorio de investigación de redes, aprendiste sobre
+
+00:00:33.166 --> 00:00:36.066
+algunos detalles de red, aprendiste sobre Midnite
+
+00:00:36.066 --> 00:00:39.533
+Midnite Meerkats, y también aprendiste sobre uno de sus
+
+00:00:39.533 --> 00:00:42.934
+servidores command-and-control usando un DNS llamado
+
+00:00:42.934 --> 00:00:44.266
+www1-google-analytics.com.
+
+00:00:44.266 --> 00:00:48.633
+En este ejercicio de laboratorio, vas a continuar tu
+
+00:00:48.633 --> 00:00:51.900
+investigación, pero te vas a enfocar en usar memory
+
+00:00:51.900 --> 00:00:55.133
+investigación, procesando una captura de memoria de uno de los
+
+00:00:55.133 --> 00:00:57.300
+Servidores de Falsimentis: FM-TETRIS.
