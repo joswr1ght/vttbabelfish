@@ -4,7 +4,6 @@ import os
 import logging
 import sys
 from typing import List, Tuple, Optional
-from anthropic import Anthropic
 from tqdm import tqdm
 import langcodes
 import nltk
@@ -19,7 +18,17 @@ logging.getLogger('httpx').setLevel(logging.WARNING)
 
 
 class VTTTranslator:
-    def __init__(self, api_key: str, exclude_terms: str = '', no_progress_bar: bool = False):
+    def __init__(self, api_key: str, llm: str = "anthropic", exclude_terms: str = '', no_progress_bar: bool = False):
+        self.llm = llm
+        if llm != 'anthropic':
+            raise ValueError('Only the "anthropic" language model is supported at this time.')
+        else:
+            try:
+                from anthropic import Anthropic
+            except ImportError:
+                logger.error('Anthropic API not found. Please install the "anthropic" package: pip install anthropic')
+                sys.exit(1)
+
         self.client = Anthropic(api_key=api_key)
         self.no_progress_bar = no_progress_bar
         self.exclude_terms = exclude_terms
@@ -247,6 +256,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('input_file', help='Input VTT file path')
     parser.add_argument('target_lang', help='Target language (2-letter or 3-letter code, or BCP-47 tag)')
+    parser.add_argument('-l', '--llm', help='LLM (anthropic or chatgpt)', default='anthropic')
     parser.add_argument('-o', '--output', help='Output file path (optional)')
     parser.add_argument('--api-key', help='Anthropic API key', required=True)
     parser.add_argument('-e', '--exclude-file', help='File with terms not to translate', required=False)
@@ -261,6 +271,10 @@ if __name__ == '__main__':
         logging.getLogger().setLevel(logging.WARNING)
         no_progress_bar = False
 
+    if (args.llm not in ['anthropic', 'chatgpt']):
+        logger.error('Only the "anthropic" and "chatgpt" models are supported at this time.')
+        sys.exit(1)
+
     if (args.exclude_file):
         logger.info('Excluding terms from file: ' + args.exclude_file)
         with open(args.exclude_file, 'r') as f:
@@ -269,7 +283,7 @@ if __name__ == '__main__':
     else:
         exclude_terms = 'Linux, Slingshot, Midnite Meerkats, Falsimentis, command injection, SQL injection'
 
-    translator = VTTTranslator(args.api_key, exclude_terms=exclude_terms,
+    translator = VTTTranslator(args.api_key, llm=args.llm, exclude_terms=exclude_terms,
                                no_progress_bar=no_progress_bar)
 
     try:
