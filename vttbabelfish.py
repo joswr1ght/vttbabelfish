@@ -28,8 +28,9 @@ class VTTTranslator:
             except ImportError:
                 logger.error('Anthropic API not found. Please install the "anthropic" package: pip install anthropic')
                 sys.exit(1)
+            self.client = Anthropic(api_key=api_key)
+            self.translate_text = self.translate_text_anthropic
 
-        self.client = Anthropic(api_key=api_key)
         self.no_progress_bar = no_progress_bar
         self.exclude_terms = exclude_terms
         self.translation_cache = {}
@@ -115,7 +116,7 @@ class VTTTranslator:
 
         return context
 
-    def translate_text(self, text: str, context: str, target_lang_name: str) -> str:
+    def translate_text_anthropic(self, text: str, context: str, target_lang_name: str) -> str:
         """Translate text using Claude API with function calling."""
         if text in self.translation_cache:
             logger.debug(f'Using cached translation for: {text}...')
@@ -232,7 +233,7 @@ technical terms but translate everything else."""
         entries = self.parse_vtt(input_file)
         translated_entries = []
 
-        logger.info(f'Starting translation of {len(entries)} entries to {target_lang_name}')
+        logger.info(f'Starting translation of {len(entries)} entries to {target_lang_name} using {self.llm}...')
 
         for (timestamp, text, original) in tqdm(entries, disable=self.no_progress_bar):
             # Get the sentence with the current text to supply as context
@@ -250,7 +251,7 @@ technical terms but translate everything else."""
 if __name__ == '__main__':
 
     if (len(sys.argv) == 1):
-        print('vttbabelfish.py: Translate VTT subtitle files using Claude API\n')
+        print('vttbabelfish.py: Translate VTT subtitle files using AI\n')
         sys.argv.append('--help')
 
     parser = argparse.ArgumentParser()
