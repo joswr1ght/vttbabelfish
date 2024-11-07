@@ -127,39 +127,39 @@ class VTTTranslator:
 
         messages = [
                 {'role': 'system', 'content': f"""You are a professional translator.
-                 Your task is to translate text from English to {target_lang_name}.
-                 The translation MUST be grammatically correct and natural {target_lang_name}.
-                 Only technical terms, commands, URLs, and proper nouns should remain in English.
-                 You must provide a complete translation - returning the original text unchanged is not acceptable."""},
+Your task is to translate text from English to {target_lang_name}.
+The translation MUST be grammatically correct and natural {target_lang_name}.
+Only technical terms, commands, URLs, and proper nouns should remain in English.
+You must provide a complete translation - returning the original text unchanged is not acceptable."""},
                 {'role': 'user', 'content': f"""
-                 The translation MUST be in {target_lang_name} - keeping English unchanged is
-                 not acceptable.
+The translation MUST be in {target_lang_name} - keeping English unchanged is
+not acceptable.
 
-                 Text to translate:
-                 {text}
+Text to translate:
+{text}
 
-                 Context (for use in translating the text; do not translate the context):
-                 {context}
+Context (for use in translating the text; do not translate the context):
+{context}
 
-                 Requirements:
-                 1. You MUST translate all regular text into proper, natural {target_lang_name}
-                 2. Only preserve the following exactly as-is:
-                    - Technical terms (e.g., {self.exclude_terms})
-                    - Proper nouns for security assessment tools (e.g., Burp Suite, Metasploit,
-                      Wireshark, Nmap, Legba, Netcat)
-                    - Commands and code snippets
-                    - Proper names (e.g., Joshua Wright, Jeff McJunkin)
-                    - URLs or file paths
+Requirements:
+1. You MUST translate all regular text into proper, natural {target_lang_name}
+2. Only preserve the following exactly as-is:
+- Technical terms (e.g., {self.exclude_terms})
+- Proper nouns for security assessment tools (e.g., Burp Suite, Metasploit,
+Wireshark, Nmap, Legba, Netcat)
+- Commands and code snippets
+- Proper names (e.g., Joshua Wright, Jeff McJunkin)
+- URLs or file paths
 
-                 Examples of good translations:
-                 Input: 'Hi, I'm Joshua Wright. Let's look at command injection.'
-                 Output: 'Hola, soy Joshua Wright. Vamos a ver command injection.'
+Examples of good translations:
+Input: 'Hi, I'm Joshua Wright. Let's look at command injection.'
+Output: 'Hola, soy Joshua Wright. Vamos a ver command injection.'
 
-                 Input: 'Open the terminal and type ls -la'
-                 Output: 'Abre la terminal y escribe ls -la'
+Input: 'Open the terminal and type ls -la'
+Output: 'Abre la terminal y escribe ls -la'
 
-                 Remember: The output MUST be in {target_lang_name}, not English. Preserve
-                 technical terms but translate everything else."""}
+Remember: The output MUST be in {target_lang_name}, not English. Preserve
+technical terms but translate everything else."""}
                 ]
 
         try:
