@@ -18,11 +18,10 @@ logging.getLogger('httpx').setLevel(logging.WARNING)
 
 
 class VTTTranslator:
-    def __init__(self, api_key: str, llm: str = "anthropic", exclude_terms: str = '', no_progress_bar: bool = False):
-        self.llm = llm
-        if llm != 'anthropic':
-            raise ValueError('Only the "anthropic" language model is supported at this time.')
-        else:
+    def __init__(self, api_key: str, platform: str = "anthropic",
+                 exclude_terms: str = '', no_progress_bar: bool = False):
+        self.platform = platform
+        if platform == 'anthropic':
             try:
                 from anthropic import Anthropic
             except ImportError:
@@ -30,6 +29,14 @@ class VTTTranslator:
                 sys.exit(1)
             self.client = Anthropic(api_key=api_key)
             self.translate_text = self.translate_text_anthropic
+        elif platform == 'chatgpt':
+            try:
+                from openai import OpenAI
+                self.client = OpenAI(api_key=api_key)
+            except ImportError:
+                logger.error('OpenAI API not found. Please install the "openai" package: pip install openai')
+                sys.exit(1)
+            self.translate_text = self.translate_text_chatgpt
 
         self.no_progress_bar = no_progress_bar
         self.exclude_terms = exclude_terms
@@ -116,6 +123,60 @@ class VTTTranslator:
 
         return context
 
+    def translate_text_chatgpt(self, text: str, context: str, target_lang_name: str) -> str:
+        """Translate text using ChatGPT API."""
+
+        messages = [
+                {'role': 'system', 'content': f"""You are a professional translator.
+                 Your task is to translate text from English to {target_lang_name}.
+                 The translation MUST be grammatically correct and natural {target_lang_name}.
+                 Only technical terms, commands, URLs, and proper nouns should remain in English.
+                 You must provide a complete translation - returning the original text unchanged is not acceptable."""},
+                {'role': 'user', 'content': f"""
+                 The translation MUST be in {target_lang_name} - keeping English unchanged is
+                 not acceptable.
+
+                 Text to translate:
+                 {text}
+
+                 Context (for use in translating the text; do not translate the context):
+                 {context}
+
+                 Requirements:
+                 1. You MUST translate all regular text into proper, natural {target_lang_name}
+                 2. Only preserve the following exactly as-is:
+                    - Technical terms (e.g., {self.exclude_terms})
+                    - Proper nouns for security assessment tools (e.g., Burp Suite, Metasploit,
+                      Wireshark, Nmap, Legba, Netcat)
+                    - Commands and code snippets
+                    - Proper names (e.g., Joshua Wright, Jeff McJunkin)
+                    - URLs or file paths
+
+                 Examples of good translations:
+                 Input: 'Hi, I'm Joshua Wright. Let's look at command injection.'
+                 Output: 'Hola, soy Joshua Wright. Vamos a ver command injection.'
+
+                 Input: 'Open the terminal and type ls -la'
+                 Output: 'Abre la terminal y escribe ls -la'
+
+                 Remember: The output MUST be in {target_lang_name}, not English. Preserve
+                 technical terms but translate everything else."""}
+                ]
+
+        try:
+            logger.debug(f'Sending request to ChatGPT API for text: {text}...')
+
+            chat_completion = self.client.chat.completions.create(messages=messages, model='gpt-4o')
+            response = chat_completion.choices[0].message.content
+
+            logger.info(f'Translated: {text} -> {response}')
+            return response
+
+        except Exception as e:
+            logger.error(f'Translation error: {str(e)}', exc_info=True)
+            logger.error(f'Failed text: {text}')
+            return text
+
     def translate_text_anthropic(self, text: str, context: str, target_lang_name: str) -> str:
         """Translate text using Claude API with function calling."""
         if text in self.translation_cache:
@@ -167,6 +228,11 @@ Requirements:
    - Commands and code snippets
    - Proper names (e.g., Joshua Wright, Jeff McJunkin)
    - URLs or file paths
+   - Capitalization and punctuation
+3. Translate the text to translate, not the context. Do not return translated context, just the text to translate.
+4. Do not return each text block as a full sentence with added punctuation. Return the text as-is, but translated.
+5. When using the supporting context to translate, do not return the entire
+context, only the corresponding text portion to be translated.
 
 Examples of good translations:
 Input: 'Hi, I'm Joshua Wright. Let's look at command injection.'
