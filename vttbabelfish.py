@@ -233,7 +233,7 @@ technical terms but translate everything else."""
         entries = self.parse_vtt(input_file)
         translated_entries = []
 
-        logger.info(f'Starting translation of {len(entries)} entries to {target_lang_name} using {self.llm}...')
+        logger.info(f'Starting translation of {len(entries)} entries to {target_lang_name} using {self.platform}...')
 
         for (timestamp, text, original) in tqdm(entries, disable=self.no_progress_bar):
             # Get the sentence with the current text to supply as context
@@ -257,7 +257,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('input_file', help='Input VTT file path')
     parser.add_argument('target_lang', help='Target language (2-letter or 3-letter code, or BCP-47 tag)')
-    parser.add_argument('-l', '--llm', help='LLM (anthropic or chatgpt)', default='anthropic')
+    parser.add_argument('-p', '--platform', help='LLM (anthropic or chatgpt)', default='anthropic')
     parser.add_argument('-o', '--output', help='Output file path (optional)')
     parser.add_argument('--api-key', help='Anthropic API key', required=True)
     parser.add_argument('-e', '--exclude-file', help='File with terms not to translate', required=False)
@@ -272,8 +272,8 @@ if __name__ == '__main__':
         logging.getLogger().setLevel(logging.WARNING)
         no_progress_bar = False
 
-    if (args.llm not in ['anthropic', 'chatgpt']):
-        logger.error('Only the "anthropic" and "chatgpt" models are supported at this time.')
+    if (args.platform not in ['anthropic', 'chatgpt']):
+        logger.error('Only the "anthropic" and "chatgpt" platforms are supported at this time.')
         sys.exit(1)
 
     if (args.exclude_file):
@@ -284,7 +284,8 @@ if __name__ == '__main__':
     else:
         exclude_terms = 'Linux, Slingshot, Midnite Meerkats, Falsimentis, command injection, SQL injection'
 
-    translator = VTTTranslator(args.api_key, llm=args.llm, exclude_terms=exclude_terms,
+    translator = VTTTranslator(args.api_key, platform=args.platform,
+                               exclude_terms=exclude_terms,
                                no_progress_bar=no_progress_bar)
 
     try:
