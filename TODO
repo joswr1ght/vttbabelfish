@@ -6,3 +6,4 @@
 
 + Check the original text sentence beginning for capitalization and reproduce in the translated text for Latin languages
 + Check for added punctuation at the end of sentences and remove if it is not present in the text to translate
++ Sometimes ChatGPT returns a full translation of the context, not just the text to be translated, despite directives to do otherwise
