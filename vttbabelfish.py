@@ -4,7 +4,6 @@ import os
 import logging
 import sys
 from typing import List, Tuple, Optional
-from tqdm import tqdm
 import langcodes
 import nltk
 
@@ -109,18 +108,26 @@ class VTTTranslator:
 
         return entries
 
-    def get_context(self, text) -> str:
-        """Get the corresponding full sentence for the text chunk to translate (e.g., a VTT line)."""
-        context = None
-        for sentence in self.sentences:
-            if text in sentence:
-                context = sentence
-                break
+    # def get_context(self, text) -> str:
+    #     """Get the corresponding full sentence for the text chunk to translate (e.g., a VTT line)."""
+    #     context = None
+    #     for sentence in self.sentences:
+    #         if text in sentence:
+    #             context = sentence
+    #             break
 
-        if context is None:
-            logger.warning(f'No context found for text chunk "{text}". Using None for context.')
+    #     if context is None:
+    #         logger.warning(f'No context found for text chunk "{text}". Using None for context.')
 
-        return context
+    #     return context
+
+    """
+    Delimiter translate concept:
+    1. Take VTT file and extract all text lines, adding a delimiter of $ to the end of each line.
+    2. Send the entire text to the API for translation, preserving delimiters (may need to chunk due to token limit).
+    3. Receive the translated text with delimiters.
+    4. Split the translated text by the delimiter and reassemble the VTT file.
+    """
 
     def translate_text_chatgpt(self, text: str, context: str, target_lang_name: str) -> str:
         """Translate text using ChatGPT API."""
@@ -279,6 +286,14 @@ technical terms but translate everything else."""
             logger.error(f'Failed text: {text}')
             return text
 
+    def tokenize_vtt(self, entries: List[Tuple[str, str, str]]) -> str:
+        """Tokenize VTT entries for translation."""
+        tokenized_entries = []
+        for (timestamp, text, original) in entries:
+            tokenized_entries.append(f'{text}$ ')
+
+        return tokenized_entries
+
     def translate_vtt(self, input_file: str, target_lang: str, output_file: Optional[str] = None) -> None:
         """Translate entire VTT file."""
         # Validate and get full language name
@@ -291,16 +306,28 @@ technical terms but translate everything else."""
             output_file = f'{base}_{target_lang}{ext}'
 
         entries = self.parse_vtt(input_file)
-        translated_entries = []
+        tokenized_text = self.tokenize_vtt(entries)
 
-        logger.info(f'Starting translation of {len(entries)} entries to {target_lang_name} using {self.platform}...')
+        logger.info(f'Starting translation of VTT to {target_lang_name} using {self.platform}...')
+        translated_tokenized_text = self.translate_text(tokenized_text, target_lang_name)
 
-        for (timestamp, text, original) in tqdm(entries, disable=self.no_progress_bar):
-            # Get the sentence with the current text to supply as context
-            context = self.get_context(text)
-            translated_text = self.translate_text(text, context, target_lang_name)
-            translated_entries.append(f'{timestamp}\n{translated_text}\n')
+        # Detokenize the translated text to reproduce VTT
+        # Ensure translated entry count matches tokenized entry count
+        if (len(translated_tokenized_text.split('$ ')) != len(tokenized_text.split('$ '))):
+            logger.error('Translated entry count does not match tokenized entry count. '
+                         f'Original: {len(tokenized_text.split("$ "))}, '
+                         f'Translated: {len(translated_tokenized_text.split("$ "))}'
+                         'Exiting.')
+            sys.exit(1)
 
+        # Detokenize the translated text
+        translated_entries = translated_tokenized_text.split('$ ')
+
+        # Replace the original text with the translated text
+        for i, (timestamp, _, original) in enumerate(entries):
+            entries[i] = (timestamp, translated_entries[i], original)
+
+        # Write the translated VTT file
         with open(output_file, 'w', encoding='utf-8') as f:
             f.write('WEBVTT\n\n')
             f.write('\n'.join(translated_entries))
