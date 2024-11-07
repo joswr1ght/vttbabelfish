@@ -40,7 +40,6 @@ class VTTTranslator:
 
         self.no_progress_bar = no_progress_bar
         self.exclude_terms = exclude_terms
-        self.translation_cache = {}
         self.prev_translations = []
         self.sentences = []
 
@@ -178,11 +177,7 @@ class VTTTranslator:
             return text
 
     def translate_text_anthropic(self, text: str, context: str, target_lang_name: str) -> str:
-        """Translate text using Claude API with function calling."""
-        if text in self.translation_cache:
-            logger.debug(f'Using cached translation for: {text}...')
-            return self.translation_cache[text]
-
+        """Translate text using Claude API."""
         tools = [{
             'name': 'translate_vtt',
             'description': f"""You are a professional translator.
@@ -265,7 +260,6 @@ technical terms but translate everything else."""
                         translation = translation.strip()
 
                         if translation:
-                            self.translation_cache[text] = translation
                             self.prev_translations.append(translation)
                             if len(self.prev_translations) > 2:
                                 self.prev_translations.pop(0)
