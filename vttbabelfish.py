@@ -361,21 +361,4 @@ if __name__ == '__main__':
     except ValueError as e:
         logger.error(str(e))
         print(f'Error: {str(e)}')
-        print('\nCommon language codes include:')
-        examples = [
-            ('en', 'English'),
-            ('es', 'Spanish'),
-            ('fr', 'French'),
-            ('de', 'German'),
-            ('it', 'Italian'),
-            ('nl', 'Dutch'),
-            ('pt', 'Portuguese'),
-            ('ru', 'Russian'),
-            ('zh', 'Chinese'),
-            ('ja', 'Japanese'),
-            ('ko', 'Korean')
-        ]
-        for code, name in examples:
-            print(f'{code:4} - {name}')
-        print('\nYou can also use BCP-47 tags like "en-US" or "es-ES"')
         sys.exit(1)
