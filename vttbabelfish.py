@@ -6,6 +6,7 @@ import sys
 from typing import List, Tuple, Optional
 import langcodes
 import nltk
+import tqdm
 
 # Set up logging
 logging.basicConfig(
@@ -104,11 +105,12 @@ Return only the sentences translated into {target_lang_name}.
         for _, text, _ in entries:
             transcript += text + ' '
         try:
-            self.sentences = nltk.tokenize.sent_tokenize(transcript)
+            sentences = nltk.tokenize.sent_tokenize(transcript)
         except LookupError:
             logger.info('Downloading NLTK tokenizer models (one time operation).')
             nltk.download('punkt_tab')
-            self.sentences = nltk.tokenize.sent_tokenize(transcript)
+            sentences = nltk.tokenize.sent_tokenize(transcript)
+        return sentences
 
     def parse_vtt(self, file_path: str) -> List[Tuple[str, str, str]]:
         """Parse VTT file into list of (timestamp, text, original_line) tuples."""
@@ -140,7 +142,7 @@ Return only the sentences translated into {target_lang_name}.
                 i += 1
 
         # Convert captions to transcript to populate self.sentences list
-        self.captions_to_transcript(entries)
+        self.sentences = self.captions_to_transcript(entries)
 
         return entries
 
@@ -159,8 +161,6 @@ Return only the sentences translated into {target_lang_name}.
 
             chat_completion = self.client.chat.completions.create(messages=messages, model='gpt-4o')
             response = chat_completion.choices[0].message.content
-
-            logger.info(f'Translated: {text} -> {response}')
             return response
 
         except Exception as e:
@@ -186,7 +186,7 @@ Return only the sentences translated into {target_lang_name}.
         }]
 
         try:
-            logger.debug(f'Sending request to Claude API for text: {text}...')
+            logger.debug(f'Sending request to Anthropic API for text: {text}...')
 
             response = self.client.messages.create(
                 model='claude-3-5-sonnet-latest',
@@ -209,7 +209,7 @@ Return only the sentences translated into {target_lang_name}.
                     logger.debug(f'Tool use received: {tool_use}')
 
                     try:
-                        # Try to get translation from tool response
+                        # Try to get translation from Anthropic response
                         tool_input = tool_use.input
                         if isinstance(tool_input, dict):
                             translation = tool_input.get('translated_text', '')
@@ -223,7 +223,6 @@ Return only the sentences translated into {target_lang_name}.
                             if len(self.prev_translations) > 2:
                                 self.prev_translations.pop(0)
 
-                            logger.info(f'Translated: {text} -> {translation}')
                             return translation
 
                     except Exception as e:
@@ -240,11 +239,25 @@ Return only the sentences translated into {target_lang_name}.
 
     def tokenize_vtt(self, entries: List[Tuple[str, str, str]]) -> str:
         """Tokenize VTT entries for translation."""
-        tokenized_entries = []
-        for (timestamp, text, original) in entries:
-            tokenized_entries.append(f'{text}$ ')
 
-        return tokenized_entries
+        # Extract the text from each VTT entry into a list of chunks
+        chunks = []
+        for entry in entries:
+            chunks.append(entry[1])
+
+        # Tokenize chunks into sentences
+        sentences = nltk.sent_tokenize(' '.join(chunks))
+
+        # Process each sentence, adding the token $ to the end of each chunk in each sentence
+        tokenized_sentences = []
+        for sentence in sentences:
+            for chunk in chunks:
+                if chunk in sentence:
+                    sentence = sentence.replace(chunk, chunk + "$")
+
+            tokenized_sentences.append(sentence)
+
+        return tokenized_sentences
 
     def translate_vtt(self, input_file: str, target_lang: str, output_file: Optional[str] = None) -> None:
         """Translate entire VTT file."""
@@ -260,29 +273,45 @@ Return only the sentences translated into {target_lang_name}.
         entries = self.parse_vtt(input_file)
         tokenized_text = self.tokenize_vtt(entries)
 
-        logger.info(f'Starting translation of VTT to {target_lang_name} using {self.platform}...')
-        translated_tokenized_text = self.translate_text(tokenized_text, target_lang_name)
+        # Iterate over tokenized_text, tranlating each sentence
+        translated_chunks = []
+        for sentence in tqdm.tqdm(tokenized_text, desc='Translating', disable=self.no_progress_bar):
+            logger.info(f'Translating sentence: {sentence}')
+            translated_sentence = self.translate_text(sentence, target_lang_name)
 
-        # Detokenize the translated text to reproduce VTT
-        # Ensure translated entry count matches tokenized entry count
-        if (len(translated_tokenized_text.split('$ ')) != len(tokenized_text.split('$ '))):
-            logger.error('Translated entry count does not match tokenized entry count. '
-                         f'Original: {len(tokenized_text.split("$ "))}, '
-                         f'Translated: {len(translated_tokenized_text.split("$ "))}'
-                         'Exiting.')
-            sys.exit(1)
+            # Ensure translated entry count matches tokenized entry count
+            if (len(translated_sentence.split('$')) != len(sentence.split('$'))):
+                logger.error('Translated entry token count does not match original token count. '
+                             f'Original: {len(sentence.split("$"))}, '
+                             f'Translated: {len(translated_sentence.split("$"))} - '
+                             'Reverting to original English text.')
+                logger.error(f'Original: {sentence}')
+                logger.error(f'Translated: {translated_sentence}')
+                translated_sentence = sentence
 
-        # Detokenize the translated text
-        translated_entries = translated_tokenized_text.split('$ ')
+            # Clean and detokenize the translated text
+            translated_sentence = translated_sentence[0:-1]  # Remove trailing token
+            translated_sentence_chunks = translated_sentence.split('$')
+            translated_sentence_chunks = [chunk.strip() for chunk in translated_sentence_chunks]
+
+            logger.info(f'Translated sentence: {translated_sentence}')
+
+            # Add translated chunks to list
+            translated_chunks.extend(translated_sentence_chunks)
 
         # Replace the original text with the translated text
-        for i, (timestamp, _, original) in enumerate(entries):
-            entries[i] = (timestamp, translated_entries[i], original)
+        # Check that the number of elements in the translated_chunks list matches the number of entries
+        if (len(translated_chunks) != len(entries)):
+            raise ValueError('The number of translated chunks does not match the number of entries in the VTT file.')
+
+        for i, (timestamp, _, _) in enumerate(entries):
+            translated_chunks[i] = (timestamp, translated_chunks[i])
 
         # Write the translated VTT file
         with open(output_file, 'w', encoding='utf-8') as f:
             f.write('WEBVTT\n\n')
-            f.write('\n'.join(translated_entries))
+            for entry in translated_chunks:
+                f.write(f'{entry[0]}\n{entry[1]}\n\n')
 
         logger.info(f'Translation completed. Output written to: {output_file}')
 
