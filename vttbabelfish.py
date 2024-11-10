@@ -42,6 +42,42 @@ class VTTTranslator:
         self.prev_translations = []
         self.sentences = []
 
+        self.user_prompt = """
+Translate this sentence into {target_lang_name}.
+Ignore the dollar signs in the text, but preserve them and their placement in the translated text.
+
+Sentence to translate in triple quotes: '''{text}'''
+
+Requirements:
+1. You MUST translate all regular text into proper, natural {target_lang_name}
+2. The translation must preserve the dollar sign delimiters from the original text
+3. The same number of delimiters must be present in the translated text
+4. When restoring the dollar sign delimiter in translated text, place the dollar sign AFTER any adjacent punctuation
+5. Only preserve the following exactly as-is:
+- Technical terms (e.g., {exclude_terms})
+- Proper nouns for security assessment tools (e.g., Burp Suite, Metasploit, Wireshark, Nmap, Legba, Netcat)
+- Commands and code snippets
+- Proper names (e.g., Joshua Wright, Jeff McJunkin)
+- URLs or file paths
+
+Examples of good translations:
+Input: "Hi, I'm Joshua Wright,$ and in this lab we'll$ look at command$ injection attacks."
+Output: "Hola, soy Joshua Wright,$ y en este laboratorio veremos$ los ataques de Command Injection$."
+
+Input: 'Open the terminal$ and type$ ls -la'
+Output: 'Abre la terminal$ y escribe$ ls -la'
+
+Remember: You MUST preserve the number of dollar sign delimiters and their placement in the translated text.
+"""
+        self.system_prompt = """
+You are a professional translator.
+Your task is to translate text from English to {target_lang_name}.
+The translation MUST be grammatically correct and natural {target_lang_name}.
+Only technical terms, commands, URLs, and proper nouns should remain in English.
+You must provide a complete translation - returning the original text unchanged is not acceptable.
+Return only the sentences translated into {target_lang_name}.
+"""
+
     def get_language_name(self, lang_code: str) -> str:
         """Convert language code to full name."""
         try:
@@ -108,66 +144,15 @@ class VTTTranslator:
 
         return entries
 
-    # def get_context(self, text) -> str:
-    #     """Get the corresponding full sentence for the text chunk to translate (e.g., a VTT line)."""
-    #     context = None
-    #     for sentence in self.sentences:
-    #         if text in sentence:
-    #             context = sentence
-    #             break
-
-    #     if context is None:
-    #         logger.warning(f'No context found for text chunk "{text}". Using None for context.')
-
-    #     return context
-
-    """
-    Delimiter translate concept:
-    1. Take VTT file and extract all text lines, adding a delimiter of $ to the end of each line.
-    2. Send the entire text to the API for translation, preserving delimiters (may need to chunk due to token limit).
-    3. Receive the translated text with delimiters.
-    4. Split the translated text by the delimiter and reassemble the VTT file.
-    """
-
-    def translate_text_chatgpt(self, text: str, context: str, target_lang_name: str) -> str:
+    def translate_text_chatgpt(self, text: str, target_lang_name: str) -> str:
         """Translate text using ChatGPT API."""
 
         messages = [
-                {'role': 'system', 'content': f"""You are a professional translator.
-Your task is to translate text from English to {target_lang_name}.
-The translation MUST be grammatically correct and natural {target_lang_name}.
-Only technical terms, commands, URLs, and proper nouns should remain in English.
-You must provide a complete translation - returning the original text unchanged is not acceptable."""},
-                {'role': 'user', 'content': f"""
-The translation MUST be in {target_lang_name} - keeping English unchanged is
-not acceptable.
-
-Text to translate:
-{text}
-
-Context (for use in translating the text; do not translate the context):
-{context}
-
-Requirements:
-1. You MUST translate all regular text into proper, natural {target_lang_name}
-2. Only preserve the following exactly as-is:
-- Technical terms (e.g., {self.exclude_terms})
-- Proper nouns for security assessment tools (e.g., Burp Suite, Metasploit,
-Wireshark, Nmap, Legba, Netcat)
-- Commands and code snippets
-- Proper names (e.g., Joshua Wright, Jeff McJunkin)
-- URLs or file paths
-
-Examples of good translations:
-Input: 'Hi, I'm Joshua Wright. Let's look at command injection.'
-Output: 'Hola, soy Joshua Wright. Vamos a ver command injection.'
-
-Input: 'Open the terminal and type ls -la'
-Output: 'Abre la terminal y escribe ls -la'
-
-Remember: The output MUST be in {target_lang_name}, not English. Preserve
-technical terms but translate everything else."""}
-                ]
+                {'role': 'system', 'content': self.system_prompt.format(target_lang_name=target_lang_name)},
+                {'role': 'user', 'content': self.user_prompt.format(text=text,
+                                                                    target_lang_name=target_lang_name,
+                                                                    exclude_terms=self.exclude_terms)}
+                 ]
 
         try:
             logger.debug(f'Sending request to ChatGPT API for text: {text}...')
@@ -183,15 +168,11 @@ technical terms but translate everything else."""}
             logger.error(f'Failed text: {text}')
             return text
 
-    def translate_text_anthropic(self, text: str, context: str, target_lang_name: str) -> str:
-        """Translate text using Claude API."""
+    def translate_text_anthropic(self, text: str, target_lang_name: str) -> str:
+        """Translate text using Anthropic API."""
         tools = [{
             'name': 'translate_vtt',
-            'description': f"""You are a professional translator.
-                Your task is to translate text from English to {target_lang_name}.
-                The translation MUST be grammatically correct and natural {target_lang_name}.
-                Only technical terms, commands, URLs, and proper nouns should remain in English.
-                You must provide a complete translation - returning the original text unchanged is not acceptable.""",
+            'description': self.system_prompt.format(target_lang_name=target_lang_name),
             'input_schema': {
                 'type': 'object',
                 'properties': {
@@ -213,39 +194,10 @@ technical terms but translate everything else."""}
                 temperature=0,
                 messages=[{
                     'role': 'user',
-                    'content': f"""Translate this text into {target_lang_name}.
-The translation MUST be in {target_lang_name} - keeping English unchanged is not acceptable.
-
-Text to translate:
-{text}
-
-Context (for use in translating the text; do not translate the context):
-{context}
-
-Requirements:
-1. You MUST translate all regular text into proper, natural {target_lang_name}
-2. Only preserve the following exactly as-is:
-   - Technical terms (e.g., {self.exclude_terms})
-   - Proper nouns for security assessment tools (e.g., Burp Suite, Metasploit, Wireshark, Nmap, Legba, Netcat)
-   - Commands and code snippets
-   - Proper names (e.g., Joshua Wright, Jeff McJunkin)
-   - URLs or file paths
-   - Capitalization and punctuation
-3. Translate the text to translate, not the context. Do not return translated context, just the text to translate.
-4. Do not return each text block as a full sentence with added punctuation. Return the text as-is, but translated.
-5. When using the supporting context to translate, do not return the entire
-context, only the corresponding text portion to be translated.
-
-Examples of good translations:
-Input: 'Hi, I'm Joshua Wright. Let's look at command injection.'
-Output: 'Hola, soy Joshua Wright. Vamos a ver command injection.'
-
-Input: 'Open the terminal and type ls -la'
-Output: 'Abre la terminal y escribe ls -la'
-
-Remember: The output MUST be in {target_lang_name}, not English. Preserve
-technical terms but translate everything else."""
-                }],
+                    'content': self.user_prompt.format(text=text,
+                                                       target_lang_name=target_lang_name,
+                                                       exclude_terms=self.exclude_terms)}
+                          ],
                 tools=tools
             )
 
